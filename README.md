@@ -1,6 +1,8 @@
 Pi-FM-RDS
 =========
 
+![](https://github.com/n0nexist/PiFmRds_colored/blob/master/screenshot.jpg?raw=true)
+
 
 ## FM-RDS transmitter using the Raspberry Pi
 
