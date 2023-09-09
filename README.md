@@ -1,4 +1,4 @@
-Pi-FM-RDS
+Pi-FM-RDS (colored version)
 =========
 
 ![](https://github.com/n0nexist/PiFmRds_colored/blob/master/screenshot.jpg?raw=true)
