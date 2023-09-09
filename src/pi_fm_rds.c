@@ -197,6 +197,15 @@
 // (broadcast radio) and about 3.5 for NBFM (walkie-talkie style radio)
 #define DEVIATION        25.0
 
+#define BRIGHT_BLACK "\033[90m"
+#define CYAN "\033[36m"
+#define GREEN "\033[32m"
+#define RED "\033[31m"
+#define WHITE "\033[37m"
+#define BOLD "\033[1m"
+#define UNDERLINE "\033[4m"
+#define RESET "\033[0m"
+
 
 typedef struct {
     uint32_t info, src, dst, length,
@@ -239,6 +248,27 @@ udelay(int us)
     nanosleep(&ts, NULL);
 }
 
+// clears the screen
+void clrscr(){
+    char* cmd = "clear";
+    system(cmd);
+}
+
+
+// get the current timestamp
+char* getCurrentDateTime() {
+    time_t rawtime;
+    struct tm *timeinfo;
+    static char datetime[50];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    strftime(datetime, sizeof(datetime), "%d %b %Y - %H:%M:%S", timeinfo);
+
+    return datetime;
+}
+
 static void
 terminate(int num)
 {
@@ -265,7 +295,10 @@ terminate(int num)
         mem_free(mbox.handle, mbox.mem_ref);
     }
 
-    printf("Terminating: cleanly deactivated the DMA engine and killed the carrier.\n");
+    printf("\n%s%sTerminating:%s cleanly deactivated the DMA engine and killed the carrier.\n",BOLD,RED,RESET);
+
+    char *currentDateTime = getCurrentDateTime();
+    printf("Stopped at: %s%s%s%s\n",BOLD,UNDERLINE,currentDateTime,RESET);
     
     exit(num);
 }
@@ -311,13 +344,21 @@ map_peripheral(uint32_t base, uint32_t len)
     return vaddr;
 }
 
-
-
 #define SUBSIZE 1
 #define DATA_SIZE 5000
 
 
 int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt, float ppm, char *control_pipe) {
+
+    // Print debug info
+    printf("%s------%s[DEBUG INFO]%s------%s\n",BRIGHT_BLACK,CYAN,BRIGHT_BLACK,RESET);
+    printf("Disturbing FM signals on %s%s%3.1f MHz%s\n",BOLD,GREEN,carrier_freq/1e6, RESET);
+    printf("Audio File: %s%s\"%s\"%s\n",BOLD,GREEN,audio_file,RESET);
+    printf("RadioText: %s%s\"%s\"%s\n",BOLD,GREEN,rt,RESET);
+    printf("ServiceName: %s%s\"%s\"%s\n",BOLD,GREEN,ps,RESET);
+    printf("PI: %s%s%u%s\n",BOLD,GREEN,pi,RESET);
+    printf("Control Pipe: %s%s%s%s\n",BOLD,GREEN,control_pipe,RESET);
+
     // Catch all signals possible - it is vital we kill the DMA engine
     // on process exit!
     for (int i = 0; i < 64; i++) {
@@ -337,20 +378,21 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
     mbox.handle = mbox_open();
     if (mbox.handle < 0)
         fatal("Failed to open mailbox. Check kernel support for vcio / BCM2708 mailbox.\n");
-    printf("Allocating physical memory: size = %d     ", NUM_PAGES * 4096);
+    printf("%s----------------------%s\n",BRIGHT_BLACK,RESET);
+    printf("Phisical Memory:\n    %ssize%s = %s%s%d%s\n",CYAN,RESET,BOLD,GREEN, NUM_PAGES * 4096, RESET);
     if(! (mbox.mem_ref = mem_alloc(mbox.handle, NUM_PAGES * 4096, 4096, MEM_FLAG))) {
         fatal("Could not allocate memory.\n");
     }
     // TODO: How do we know that succeeded?
-    printf("mem_ref = %u     ", mbox.mem_ref);
+    printf("    %smem_ref%s = %s%s%u%s\n",CYAN,RESET,BOLD,GREEN,mbox.mem_ref, RESET);
     if(! (mbox.bus_addr = mem_lock(mbox.handle, mbox.mem_ref))) {
         fatal("Could not lock memory.\n");
     }
-    printf("bus_addr = %x     ", mbox.bus_addr);
+    printf("    %sbus_addr%s = %s%s%x%s\n",CYAN,RESET,BOLD,GREEN,mbox.bus_addr,RESET);
     if(! (mbox.virt_addr = mapmem(BUS_TO_PHYS(mbox.bus_addr), NUM_PAGES * 4096))) {
         fatal("Could not map memory.\n");
     }
-    printf("virt_addr = %p\n", mbox.virt_addr);
+    printf("    %svirt_addr%s = %s%s%p%s\n",CYAN,RESET,BOLD,GREEN,mbox.virt_addr,RESET);
     
 
     // GPIO4 needs to be ALT FUNC 0 to output the clock
@@ -412,9 +454,13 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
     float divider = (PLLFREQ/(2000*228*(1.+ppm/1.e6)));
     uint32_t idivider = (uint32_t) divider;
     uint32_t fdivider = (uint32_t) ((divider - idivider)*pow(2, 12));
+
+    printf("%s----------------------%s\n",BRIGHT_BLACK,RESET);
     
-    printf("ppm corr is %.4f, divider is %.4f (%d + %d*2^-12) [nominal 1096.4912].\n", 
-                ppm, divider, idivider, fdivider);
+    printf("PPM:\n    %scorr%s = %s%s%.4f%s\n    %sdivider%s = %s%s%.4f%s (%d + %d*2^-12) [nominal 1096.4912].\n", 
+                CYAN,RESET,BOLD,GREEN,ppm,RESET,CYAN,RESET,BOLD,GREEN,divider,RESET);
+
+    printf("%s----------------------%s\n",BRIGHT_BLACK,RESET);
 
     pwm_reg[PWM_CTL] = 0;
     udelay(10);
@@ -433,7 +479,6 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
     udelay(10);
     pwm_reg[PWM_CTL] = PWMCTL_USEF1 | PWMCTL_PWEN1;
     udelay(10);
-    
 
     // Initialise the DMA
     dma_reg[DMA_CS] = BCM2708_DMA_RESET;
@@ -464,25 +509,19 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
     
     if(ps) {
         set_rds_ps(ps);
-        printf("PI: %04X, PS: \"%s\".\n", pi, ps);
     } else {
-        printf("PI: %04X, PS: <Varying>.\n", pi);
         varying_ps = 1;
     }
-    printf("RT: \"%s\"\n", rt);
     
     // Initialize the control pipe reader
     if(control_pipe) {
-        if(open_control_pipe(control_pipe) == 0) {
-            printf("Reading control commands on %s.\n", control_pipe);
-        } else {
-            printf("Failed to open control pipe: %s.\n", control_pipe);
+        if(open_control_pipe(control_pipe) != 0) {
             control_pipe = NULL;
         }
     }
-    
-    
-    printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
+
+    char *currentDateTime = getCurrentDateTime();
+    printf("Starting at: %s%s%s%s\n",BOLD,UNDERLINE,currentDateTime,RESET);
 
     for (;;) {
         // Default (varying) PS
@@ -548,11 +587,12 @@ int main(int argc, char **argv) {
     char *audio_file = NULL;
     char *control_pipe = NULL;
     uint32_t carrier_freq = 107900000;
-    char *ps = NULL;
-    char *rt = "PiFmRds: live FM-RDS transmission from the RaspberryPi";
+    char *ps = "Hacked Station";
+    char *rt = "Hello World!";
     uint16_t pi = 0x1234;
     float ppm = 0;
-    
+
+    clrscr();        
     
     // Parse command-line arguments
     for(int i=1; i<argc; i++) {
